@@ -29,13 +29,32 @@ export async function sendEmail(mail: Mail): Promise<{ ok: boolean; id?: string;
     return { ok: true, id: "dev-log" };
   }
 
+  const resend = new Resend(key);
+  const attempt = async (sender: string) => {
+    const res = await resend.emails.send({ from: sender, to: mail.to, subject: mail.subject, html: mail.html, text: mail.text });
+    if (res.error) throw new Error(res.error.message);
+    return res.data?.id;
+  };
+
   try {
-    const resend = new Resend(key);
-    const res = await resend.emails.send({ from, to: mail.to, subject: mail.subject, html: mail.html, text: mail.text });
-    if (res.error) return { ok: false, error: res.error.message };
-    return { ok: true, id: res.data?.id };
+    return { ok: true, id: await attempt(from) };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "send failed" };
+    const message = err instanceof Error ? err.message : "send failed";
+    // Until the sending domain is verified in Resend, fall back to Resend's
+    // own sender. That address only delivers to the Resend account owner, so
+    // this keeps admin testing working and makes the gap visible in the logs.
+    if (/not verified/i.test(message) && !/resend\.dev/.test(from)) {
+      console.warn(`[email] ${message} Falling back to onboarding@resend.dev for ${mail.to}. Verify the domain at resend.com/domains.`);
+      try {
+        return { ok: true, id: await attempt("House of Alchemie <onboarding@resend.dev>") };
+      } catch (err2) {
+        const m2 = err2 instanceof Error ? err2.message : "send failed";
+        console.error(`[email] fallback send failed for ${mail.to}: ${m2}`);
+        return { ok: false, error: m2 };
+      }
+    }
+    console.error(`[email] send failed for ${mail.to}: ${message}`);
+    return { ok: false, error: message };
   }
 }
 
