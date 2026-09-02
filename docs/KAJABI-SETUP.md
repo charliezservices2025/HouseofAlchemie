@@ -1,96 +1,84 @@
-# Connecting Kajabi to the platform
+# Kajabi and the platform: how it is connected and what to expect
 
-Erica, this is the one piece of setup that lives in your Kajabi account rather than in the app, so it needs to be done by you or by someone signed in as you. It takes about twenty minutes the first time. Once it is done, a purchase on any of your checkouts gives that person their advisor within a minute or two, and a cancellation takes it away, with nobody touching anything.
+Erica, this is the plain language version of how your Kajabi checkouts feed the platform. It was all wired up on 2 September 2026 and tested end to end, including a test message sent from Kajabi's own servers, so there is nothing for you to set up. This tells you what happens on its own, the three things that still need a hand, and how to check on any of it.
 
-## What we are setting up
+## The short version
 
-Kajabi will send a small message to the platform every time one of two things happens:
+- Someone buys any of your twelve offers on Kajabi. Within a minute the platform creates their account (or finds it), unlocks the right advisor or suite, and emails them a set password link from hello@houseofalchemie.ai.
+- Every monthly payment keeps their access open for another month, plus a week of grace for Kajabi's payment retries.
+- When they cancel, Kajabi keeps them in until the end of the month they paid for and stops charging. No payment, no renewal: the advisor locks.
+- You change nothing in Kajabi for any of this. Prices, coupons, trials and checkout pages are Kajabi's business and the platform never needs to know.
 
-1. Someone **buys** one of your offers.
-2. Someone's subscription to one of your offers is **cancelled** (including a refund or a failed renewal that Kajabi ends).
+## What is set up in Kajabi
 
-The platform reads the message, finds the offer, and grants or removes access. Everything Kajabi sends is kept, so you can always see exactly what happened and when.
+Settings > Integrations & Webhooks > Webhooks has two entries, both pointing at the platform:
 
-## The address to send it to
-
-```
-https://app.houseofalchemie.ai/api/kajabi/webhook?token=YOUR_SECRET
-```
-
-You do not need to build this yourself. Sign in to the platform, open Admin > Kajabi, and the "Connect Kajabi" box shows the complete address with the secret already filled in and a "Copy URL" button. The secret is what stops anyone else from granting themselves access, so treat the whole address like a password: paste it into Kajabi and nowhere else. If it ever leaks, I can change it in a minute.
-
-## Where in Kajabi
-
-**Done on 2 September 2026.** Settings > Integrations & Webhooks > Webhooks now has two webhooks, both pointing at the address above:
-
-| Kajabi event | What it means | What the platform does |
+| Kajabi event | When it fires | What the platform does |
 | --- | --- | --- |
-| Payment Succeeded (`payment.succeeded`) | Any successful charge: a first purchase, a monthly renewal, a payment plan instalment | Grants the offer's advisor or suite. A renewal for something the person already holds is a no-op. |
-| Cart Purchase (`order.created`) | A Kajabi Cart order, which can hold several offers | Grants every offer in the order. |
+| Payment Succeeded | Every successful charge: a first purchase, a monthly renewal, a trial converting | Unlocks what that offer includes, or extends it |
+| Cart Purchase | An order from the Kajabi Cart, which can hold several offers | Unlocks every offer in the order |
 
-One webhook per event covers every offer; there is nothing to do per offer.
+Please leave those two rows alone. Deleting one silently stops new purchases from getting in. If that ever happens by accident, tell me and I will put it back in two minutes. The address they point at contains a secret, so it should not be pasted anywhere else.
 
-**How cancellations work: access follows payments.** Kajabi's webhooks only report money coming in. There is no Kajabi event for a cancelled subscription, a refund or a failed renewal (Zapier has no such trigger either, and Kajabi's API that could report it is a Pro plan feature). So the platform does not wait to be told. Every successful payment buys a window of access:
+## The twelve offers and what each unlocks
 
-| What Kajabi sent | Access window |
+| Kajabi offer | Unlocks |
 | --- | --- |
-| A payment for a monthly plan | 38 days from that payment: a 31 day month plus 7 days for Kajabi's retries |
-| A $0 payment (a free trial starting) | 10 days: the 7 day trial plus 3 |
+| Evren, The Priceless Concierge | Evren |
+| Lyra, The Freedom Catalyst, and Lyra, 7 Day Trial | Lyra and Evren |
+| Lumi, The Wealth Architect, and Lumi, 7 Day Trial | Lumi and Evren |
+| Rune, The Luxury Closer, and Rune, 7 Day Trial | Rune and Evren |
+| Auren, The Social Alchemist, and Auren, 7 Day Trial | Auren and Evren |
+| The Lifestyle Architect | Evren, Lumi and Lyra |
+| The Alchemie of Influence | Evren, Rune and Auren |
+| The House of Alchemie | All five |
+
+The offer called "OLD Rune broken do not use" is deliberately not connected.
+
+## How long access lasts
+
+Kajabi tells the platform when money comes in. It does not tell anyone when a subscription is cancelled, refunded or stops paying. That is a limit of Kajabi, not a choice we made: Zapier cannot see it either, and the Kajabi feature that could report it is only on their Pro plan. So the platform does not wait to be told. Each payment buys a window of access:
+
+| Payment | Access from that payment |
+| --- | --- |
+| A monthly plan | 38 days: the month plus 7 days for Kajabi's retries |
+| A $0 payment, which is a free trial starting | 10 days: the 7 day trial plus 3 |
 | A one time offer | No end date |
 
-Each renewal payment pushes the window out again. When someone cancels, Kajabi lets them keep access until the end of the period they paid for and then stops charging; no payment arrives, the window closes, and the advisor locks. A failed renewal that Kajabi's retries never recover ends the same way. The numbers live in Admin > Settings > Kajabi access windows, with a per offer override for anything that is not monthly (an annual plan would be 372).
+Each renewal pushes the window out again, so a paying subscriber never notices any of this. The numbers live in Admin > Settings > Kajabi access windows, in case a plan ever changes to annual, say.
 
-**Immediate removal**, for example a refund on the day of purchase: Admin > Users > the person > Revoke. That is instant and it is the only case that needs a hand.
+## The three things that need a hand
 
-Every night the platform marks closed windows as expired, so Admin > Users shows who lapsed.
+1. **Removing someone straight away.** A refund on day one, or anyone you want out now. Admin > Users > the person > Revoke. Instant.
+2. **Giving access without a purchase.** A gift, a partner, a VIP. Admin > Users > the person > Grant, choose the advisor or suite, and an end date if you want one. Kajabi never knows about it and never takes it away, which is the point.
+3. **A new offer in Kajabi.** Create it in Kajabi as usual, then in Admin > Advisors (or Admin > Suites) paste the offer id into the Kajabi offer ids box of everything it should unlock. A specialist plan goes on that advisor and on Evren. The id is the number in the address bar when the offer is open in Kajabi. If you forget, the first purchase shows in Admin > Kajabi with a "Map this offer" link: map it, press Replay, and the buyer is in.
 
-**If you ever relay through Zapier or Make**, send these fields, spelled exactly like this:
+## A trial that starts at $0
 
-| Field | Purchase Zap | Cancellation Zap |
-| --- | --- | --- |
-| `event` | `offer_purchased` | `offer_cancelled` |
-| `email` | the member's email from the trigger | the member's email from the trigger |
-| `name` | the member's name | the member's name |
-| `offer_id` | the offer id from the trigger | the offer id from the trigger |
-| `member_id` | the member id from the trigger | the member id from the trigger |
+Kajabi should send a Payment Succeeded for the $0 charge when a 7 day trial starts, which opens the 10 day window; the first real charge on day 7 extends it to a full month. Kajabi's documentation does not say this in so many words, so the first trial signup is the proof: look in Admin > Kajabi that day. If nothing arrived, tell me and I will handle trials another way. Nobody is left out in the meantime, because you can grant them from Admin.
 
-The word in `event` matters: anything with "purchase" grants, anything with "cancel" revokes. Send only those two kinds of event. A "payment failed" event would also count as a cancellation, so leave it out unless you want failed payments to remove access immediately.
+## Checking on it
 
-## Which offers
+Admin > Kajabi lists every message Kajabi has ever sent, newest first: when it arrived, what kind it was, the email, the offer, and what the platform did with it, for example "granted Lyra, Evren until 10 Oct 2026", "renewed Lyra, Evren until 9 Nov 2026" or "already had Lyra, Evren". A row highlighted in red needs attention and the note says why. Nothing in that list is ever deleted.
 
-Every offer that should open an advisor or a suite. At the time of writing that is twelve: the five advisors, the three suites, and the trial versions that are separate offers in Kajabi. A trial offer is its own offer with its own id, so it needs to be mapped as well, or a person on a trial will not get in.
+Admin > Users shows each person, what they have, and the end date of each window. Every night the platform marks windows that have closed as expired, so this screen always reflects who is in.
 
-You do not choose offers on the Kajabi side. Kajabi sends every purchase; the platform decides what each offer unlocks from the mapping in Admin.
+## The acceptance check from our agreement
 
-## Finding an offer id
+Do this once with a real card and an email address you have never used on the platform. About ten minutes.
 
-The easiest way is to not look it up at all: make the first purchase (below) and read it from the event. If you want it by hand: Products > Offers > open the offer. The address bar shows something like `app.kajabi.com/admin/offers/2148123456/edit`. The number is the offer id.
+1. Buy the cheapest offer, or a trial.
+2. Within a minute, Admin > Kajabi shows a row for it with a result beginning "granted".
+3. The set password email arrives at that address from hello@houseofalchemie.ai. Open it, choose a password, answer the intake questions, and ask the advisor something.
+4. Admin > Users > that account shows the advisor with an end date about 38 days out (10 for a trial).
+5. Cancel that subscription in Kajabi so you are not charged again. Kajabi sends nothing for a cancellation, and that is expected: access ends on the end date. To see it lock straight away, press Revoke in Admin, then sign in as that account. The advisor is locked, with a link back to your sales page.
+6. Keep the account. It is the quickest way to check anything later.
 
-One honest note. The exact shape of what Kajabi sends, including whether the offer id arrives as that number or as a different identifier, is discovered from the first real event. That is why the platform keeps every message in full. Do not spend time guessing; do the test purchase and the Admin screen will show you what arrived.
+## If something looks wrong
 
-## Mapping offers in the app
+- A buyer says they have no access: open Admin > Kajabi and find their email. No row means Kajabi did not call us, so check the two webhooks are still there. A red row says what was missing. A "granted" row means it worked, so check they used the same email on the platform as at checkout, and that the set password email did not land in spam.
+- Anything else: send me a screenshot of the row in Admin > Kajabi and I will take it from there.
 
-Admin > Advisors > Evren > Kajabi offer ids, one id per line. Add Evren's offer id and her trial offer id, save. Repeat for each advisor. Then Admin > Suites, where each suite has the same Kajabi offer ids box. The Advisors page shows a warning until every advisor has at least one id, so you can see at a glance what is still missing.
+## For whoever maintains this
 
-Two rules that trip people up:
-
-- Every specialist plan includes Evren. So Lyra's offer id goes on Lyra **and** on Evren. Same for Lumi, Rune and Auren. A suite's offer id goes on the suite only; the suite already knows its members.
-- If a purchase arrives for an offer that is not mapped yet, nothing is lost. Admin > Kajabi shows the event with the note "offer 123 is not mapped" and a **Map this offer** link. The link opens Admin > Advisors; paste the id onto the right advisor (or suite), save, go back to Admin > Kajabi and press **Replay** on that event. The purchase is then applied and the row's result changes to "granted".
-
-## Testing with one real purchase
-
-Use a real checkout with a real card of your own, on the cheapest offer or a trial. A $0 or 100 percent coupon purchase also works if Kajabi sends the same purchase event for it, and the Admin screen will tell you whether it did.
-
-1. Buy the offer with an email address you have not used on the platform before.
-2. Within a minute, open Admin > Kajabi. You should see one new row: the event type, your email, the offer id, and a result beginning `granted Evren` (or whatever you bought; for a brand new email it also says "created account and sent set password email"). If the result says the offer is not mapped, follow "Mapping offers in the app" above, then press Replay on the row.
-3. Check the inbox you bought with. There is an email from House of Alchemie with a set password link. Open it, choose a password, and you are looking at the intake questions, then at your advisor. That is the "buy on Kajabi and use Evren within minutes" check from our agreement, done.
-4. Now cancel that subscription in Kajabi: People > the member > the offer > Cancel (or Products > Offers > the offer > the subscriber). Back in Admin > Kajabi you should see a second row with the result `revoked 1 entitlement(s) for Evren`.
-5. Sign in as that test account. The advisor is now locked on the advisors page and in the rail, with a link to the sales site. That is the "cancellation removes access" check.
-
-If step 2 shows nothing at all after a couple of minutes, Kajabi did not call us. Check the address in the webhook or Zap, including the token, and that the Zap is switched on. If step 2 shows a row with an error such as "no member email in payload", the message arrived but is missing a field; send me a screenshot of the row and I will adjust the reader.
-
-## Afterwards
-
-- Keep the test account. It is useful every time something changes.
-- Any time you add an offer in Kajabi, map it in Admin. If you forget, the first purchase will remind you with a Map this offer link.
-- Changing a price is done in Kajabi only. The platform never needs to know.
+The webhook address is `https://app.houseofalchemie.ai/api/kajabi/webhook?token=SECRET`, shown complete in Admin > Kajabi. Kajabi's native payloads carry `event`, `offer.id`, `offer.type`, `member.email` and `payment_transaction.amount_paid`; Cart orders carry `order_items[]`. If events are ever relayed through another tool, post JSON with `event` (anything containing "purchase" grants, anything containing "cancel" revokes), `email`, `name`, `offer_id` and `member_id`. Every call is stored in full and can be replayed from Admin > Kajabi.
