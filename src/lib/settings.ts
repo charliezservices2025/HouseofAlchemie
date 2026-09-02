@@ -42,6 +42,18 @@ export const DEFAULTS = {
   "chat.maxHistoryMessages": 30 as number,
   "chat.summarizeAfterMessages": 24 as number,
 
+  // Access follows payments. Kajabi only tells us when money comes in, never
+  // when a subscription ends, so every successful payment buys a window of
+  // access and a cancellation simply means the window is not extended.
+  // 38 = a 31 day month plus 7 days for Kajabi's failed payment retries.
+  "kajabi.accessDays": 38 as number,
+  // A $0 payment is a free trial starting (or a 100 percent coupon). 7 day
+  // trial plus 3 days grace; the first real charge extends it.
+  "kajabi.freeAccessDays": 10 as number,
+  // Per offer override in days, keyed by Kajabi offer id, for anything that
+  // is not monthly, for example an annual plan: { "2151358029": 372 }.
+  "kajabi.offerAccessDays": {} as Record<string, number>,
+
   "brand.appName": "House of Alchemie" as string,
   "brand.supportEmail": "hello@houseofalchemie.ai" as string,
   "brand.kajabiLibraryUrl": "https://www.houseofalchemie.ai/library" as string,

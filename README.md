@@ -7,7 +7,7 @@ This README is for whoever runs the code. The plain language guides for Erica ar
 ## What it does
 
 - Accounts with verified email, password reset, revocable sessions, rate limiting and lockout.
-- Access granted and revoked automatically from Kajabi purchase and cancellation webhooks.
+- Access granted automatically from Kajabi payment webhooks. Each payment opens a window of access (38 days for monthly, 10 for a $0 trial start, editable in Admin), so a cancellation or failed renewal ends access when the window closes; Kajabi has no cancellation event to listen for. A nightly job marks closed windows as expired.
 - A shared intake at sign up, plus a few questions per advisor, all editable as settings.
 - Chat that streams word by word, saves every conversation, and formats tables and plans properly.
 - Long term memory: structured facts, rolling summaries, and a screen where the subscriber corrects what is remembered.

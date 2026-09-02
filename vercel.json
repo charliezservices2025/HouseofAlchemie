@@ -3,5 +3,8 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "github": { "silent": true },
-  "crons": [{ "path": "/api/health", "schedule": "*/10 * * * *" }]
+  "crons": [
+    { "path": "/api/health", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/expire", "schedule": "15 3 * * *" }
+  ]
 }

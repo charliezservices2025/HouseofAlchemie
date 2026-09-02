@@ -30,12 +30,19 @@ You do not need to build this yourself. Sign in to the platform, open Admin > Ka
 
 One webhook per event covers every offer; there is nothing to do per offer.
 
-**Cancellations are the gap.** Kajabi's own webhooks only report money coming in. There is no Kajabi event for a cancelled subscription, a refund or a failed renewal, so on its own this setup never removes access. Two ways to close that:
+**How cancellations work: access follows payments.** Kajabi's webhooks only report money coming in. There is no Kajabi event for a cancelled subscription, a refund or a failed renewal (Zapier has no such trigger either, and Kajabi's API that could report it is a Pro plan feature). So the platform does not wait to be told. Every successful payment buys a window of access:
 
-1. **Zapier (recommended, ten minutes):** a Zap with the Kajabi trigger "Subscription Cancellation" and the action "Webhooks by Zapier: POST" to the same address, sending the fields in the table below with `event` set to `offer_cancelled`. Make can do the same.
-2. **By hand until then:** Admin > Users > the person > Revoke. The Kajabi purchase list shows who cancelled.
+| What Kajabi sent | Access window |
+| --- | --- |
+| A payment for a monthly plan | 38 days from that payment: a 31 day month plus 7 days for Kajabi's retries |
+| A $0 payment (a free trial starting) | 10 days: the 7 day trial plus 3 |
+| A one time offer | No end date |
 
-A free trial that converts fires Payment Succeeded on its first real charge. Whether Kajabi also fires it when the $0 trial starts is confirmed by the first trial signup; if it does not, the trial offers need the Zapier route as well, with the "New Purchase" trigger.
+Each renewal payment pushes the window out again. When someone cancels, Kajabi lets them keep access until the end of the period they paid for and then stops charging; no payment arrives, the window closes, and the advisor locks. A failed renewal that Kajabi's retries never recover ends the same way. The numbers live in Admin > Settings > Kajabi access windows, with a per offer override for anything that is not monthly (an annual plan would be 372).
+
+**Immediate removal**, for example a refund on the day of purchase: Admin > Users > the person > Revoke. That is instant and it is the only case that needs a hand.
+
+Every night the platform marks closed windows as expired, so Admin > Users shows who lapsed.
 
 **If you ever relay through Zapier or Make**, send these fields, spelled exactly like this:
 

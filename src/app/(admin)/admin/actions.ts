@@ -441,6 +441,47 @@ export async function saveChatSettings(_prev: ActionState, form: FormData): Prom
   return { ok: true, message: "Chat settings saved." };
 }
 
+const kajabiAccessSchema = z.object({
+  accessDays: z.coerce.number().int().min(1, "At least one day.").max(3660, "That is more than ten years."),
+  freeAccessDays: z.coerce.number().int().min(1, "At least one day.").max(3660, "That is more than ten years."),
+  offerAccessDays: z.string().max(4000),
+});
+
+/** One override per line: "2151358029 372" or "2151358029=372". Blank lines and comments are ignored. */
+function parseOfferAccessDays(text: string): { ok: true; map: Record<string, number> } | { ok: false; error: string } {
+  const map: Record<string, number> = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const m = line.match(/^(\d+)\s*[=:\s]\s*(\d+)$/);
+    if (!m) return { ok: false, error: `Could not read "${line}". Use one offer id and a number of days per line, like 2151358029 372.` };
+    const days = Number(m[2]);
+    if (days < 1 || days > 3660) return { ok: false, error: `Days for offer ${m[1]} must be between 1 and 3660.` };
+    map[m[1]] = days;
+  }
+  return { ok: true, map };
+}
+
+export async function saveKajabiAccessSettings(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const admin = await requireAdmin();
+  const parsed = kajabiAccessSchema.safeParse({
+    accessDays: str(form.get("accessDays")),
+    freeAccessDays: str(form.get("freeAccessDays")),
+    offerAccessDays: str(form.get("offerAccessDays")),
+  });
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
+  const overrides = parseOfferAccessDays(parsed.data.offerAccessDays);
+  if (!overrides.ok) return { error: overrides.error };
+  const { accessDays, freeAccessDays } = parsed.data;
+
+  await setSetting("kajabi.accessDays", accessDays as SettingValue<"kajabi.accessDays">);
+  await setSetting("kajabi.freeAccessDays", freeAccessDays as SettingValue<"kajabi.freeAccessDays">);
+  await setSetting("kajabi.offerAccessDays", overrides.map as SettingValue<"kajabi.offerAccessDays">);
+  await audit(admin.id, "setting.update", "Setting", "kajabi", { accessDays, freeAccessDays, offerAccessDays: overrides.map });
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Kajabi access settings saved. They apply to the next payment event; existing windows are unchanged." };
+}
+
 const brandSchema = z.object({
   appName: z.string().min(1, "The app needs a name.").max(80),
   supportEmail: z.email({ message: "Support email must be a valid address." }).max(254),

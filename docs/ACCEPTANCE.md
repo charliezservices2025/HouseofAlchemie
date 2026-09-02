@@ -16,10 +16,11 @@ Do this with a real checkout and an email address that has never been used on th
 | Set a password, answered the intake questions, and reached Evren | [ ] | |
 | Evren answered a first question | [ ] | |
 | Time from paying to first answer was under ten minutes (write the actual time) | [ ] | |
+| Admin > Users > that account shows the entitlement with an end date about 38 days out (10 for a trial) | [ ] | |
 | Cancelled the subscription in Kajabi | [ ] | |
-| The cancellation appears in Admin > Kajabi with the result "revoked" | [ ] | |
+| Kajabi sends nothing for a cancellation, so: in Admin > Users > that account press Revoke, or wait for the end date | [ ] | |
 | Signed in as that account: Evren is locked on the advisors page and in the rail | [ ] | |
-| Bought again with the same email: access returns without a new account | [ ] | |
+| Bought again with the same email: access returns without a new account, with a fresh end date | [ ] | |
 
 ## 2. Evren answers the agreed twenty five questions to your satisfaction
 

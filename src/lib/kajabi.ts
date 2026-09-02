@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { issueToken } from "@/lib/auth/tokens";
 import { sendEmail, setPasswordMail } from "@/lib/email";
 import { safeEqual } from "@/lib/auth/crypto";
+import { getSettings } from "@/lib/settings";
 
 export type NormalisedKajabiEvent = {
   eventType: string;
@@ -15,6 +16,10 @@ export type NormalisedKajabiEvent = {
   /** Every offer in the event. A Kajabi Cart order can carry several. */
   offerIds: string[];
   offerTitle: string | null;
+  /** Kajabi's offer type: "single" is one time, "subscription" recurs. */
+  offerType: string | null;
+  /** What was charged, in cents. 0 is a free trial starting. null when the payload does not say. */
+  amountCents: number | null;
 };
 
 function dig(obj: unknown, paths: string[]): string | null {
@@ -101,6 +106,12 @@ export function normaliseKajabiPayload(payload: unknown, headerEvent?: string | 
   const offerIds = Array.from(new Set([singleOfferId, ...cartOffers.map((c) => c.id)].filter((x): x is string => !!x)));
   const offerId = offerIds[0] ?? null;
   const offerTitle = singleOfferTitle ?? cartOffers[0]?.title ?? null;
+  const offerType = dig(payload, ["offer.type", "data.offer.type", "payload.offer.type", "offer_type"])?.toLowerCase() ?? null;
+  const amountRaw = dig(payload, [
+    "payment_transaction.amount_paid", "data.payment_transaction.amount_paid", "payload.payment_transaction.amount_paid",
+    "amount_paid", "amount_in_cents", "order.amount_paid", "order.total_in_cents", "data.amount_paid",
+  ]);
+  const amountCents = amountRaw !== null && /^-?\d+(\.\d+)?$/.test(amountRaw) ? Math.round(Number(amountRaw)) : null;
 
   // Kajabi's own names are "payment.succeeded" and "order.created"; Zapier
   // relays use words like "purchase" and "cancel". Anything that reads as a
@@ -113,7 +124,28 @@ export function normaliseKajabiPayload(payload: unknown, headerEvent?: string | 
     action = "revoke";
   }
 
-  return { eventType, action, memberEmail, memberName, memberId, offerId, offerIds, offerTitle };
+  return { eventType, action, memberEmail, memberName, memberId, offerId, offerIds, offerTitle, offerType, amountCents };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long one successful payment keeps an entitlement open. Kajabi never
+ * reports a cancellation, refund or failed renewal, so access is a window
+ * that each payment extends: no next payment, no more access once the
+ * window closes. A one time offer has no window; the person keeps it.
+ */
+export async function accessWindowFor(ev: NormalisedKajabiEvent, offerId: string): Promise<Date | null> {
+  if (ev.offerType === "single") return null;
+  const s = await getSettings(["kajabi.accessDays", "kajabi.freeAccessDays", "kajabi.offerAccessDays"]);
+  const override = s["kajabi.offerAccessDays"][offerId];
+  const days = typeof override === "number" && override > 0 ? override : ev.amountCents === 0 ? s["kajabi.freeAccessDays"] : s["kajabi.accessDays"];
+  return new Date(Date.now() + days * DAY_MS);
+}
+
+function formatUntil(d: Date | null): string {
+  if (!d) return "with no end date";
+  return `until ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`;
 }
 
 export function kajabiSecretMatches(provided: string | null): boolean {
@@ -196,11 +228,22 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
   }
 
   let granted = 0;
+  let renewed = 0;
+  let latest: Date | null | undefined;
   for (const t of targets) {
+    const until = await accessWindowFor(ev, t.offerId);
+    if (latest === undefined || (until && (!latest || until > latest))) latest = until;
     const existing = await db.entitlement.findFirst({
       where: { userId: user.id, status: "ACTIVE", kajabiOfferId: t.offerId, ...(t.advisorId ? { advisorId: t.advisorId } : { suiteId: t.suiteId }) },
     });
-    if (existing) continue;
+    if (existing) {
+      // A renewal pushes the window out. An open ended entitlement stays open ended.
+      if (existing.expiresAt && until && until > existing.expiresAt) {
+        await db.entitlement.update({ where: { id: existing.id }, data: { expiresAt: until } });
+        renewed += 1;
+      }
+      continue;
+    }
     await db.entitlement.create({
       data: {
         userId: user.id,
@@ -209,10 +252,12 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
         kajabiOfferId: t.offerId,
         kajabiMemberId: ev.memberId,
         note: ev.offerTitle ?? undefined,
+        expiresAt: until,
       },
     });
     granted += 1;
   }
+  const untilNote = formatUntil(latest ?? null);
 
   // The most specific thing they bought is the one the welcome email names.
   const suiteNames = suites.map((s) => s.name);
@@ -225,7 +270,9 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
   if (isNew || (granted > 0 && !user.passwordHash)) {
     const raw = await issueToken(user.id, "SET_PASSWORD");
     await sendEmail(setPasswordMail(user.email, raw, headline));
-    return `granted ${names}; ${isNew ? "created account and " : ""}sent set password email${unmappedNote}`;
+    return `granted ${names} ${untilNote}; ${isNew ? "created account and " : ""}sent set password email${unmappedNote}`;
   }
-  return (granted ? `granted ${names}` : `already had ${names}`) + unmappedNote;
+  if (granted) return `granted ${names} ${untilNote}${unmappedNote}`;
+  if (renewed) return `renewed ${names} ${untilNote}${unmappedNote}`;
+  return `already had ${names}${unmappedNote}`;
 }

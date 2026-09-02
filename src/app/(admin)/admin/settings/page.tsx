@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { db } from "@/lib/db";
 import { DEFAULTS, getSettings, type SettingKey } from "@/lib/settings";
-import { restoreSettingDefault, saveBrandSettings, saveChatSettings } from "@/app/(admin)/admin/actions";
+import { restoreSettingDefault, saveBrandSettings, saveChatSettings, saveKajabiAccessSettings } from "@/app/(admin)/admin/actions";
 import { ActionButton, ActionForm } from "@/components/admin/action-form";
 import { IntakeQuestionsForm, PricingForm } from "@/components/admin/settings-forms";
 import { PageHeader, Section, Field } from "@/components/admin/ui";
@@ -74,6 +74,35 @@ export default async function AdminSettingsPage() {
             </Field>
             <Field label="Summarise after" htmlFor="summarizeAfterMessages" hint={`Default ${d["chat.summarizeAfterMessages"]}. A conversation longer than this gets a rolling summary.`}>
               <input id="summarizeAfterMessages" name="summarizeAfterMessages" type="number" inputMode="numeric" className="field" defaultValue={settings["chat.summarizeAfterMessages"]} min={2} max={200} required />
+            </Field>
+          </div>
+        </ActionForm>
+      </Section>
+
+      <Section
+        title="Kajabi access windows"
+        description="Kajabi only tells us when a payment succeeds, never when a subscription ends. So each payment buys a window of access, and a cancellation, refund or failed renewal simply means the window is not extended. Set the window a little longer than the billing period to cover Kajabi's payment retries."
+        actions={<Restore keys={["kajabi.accessDays", "kajabi.freeAccessDays", "kajabi.offerAccessDays"]} customised={customised} />}
+      >
+        <ActionForm action={saveKajabiAccessSettings} submitLabel="Save access windows" className="max-w-2xl">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Days per payment" htmlFor="accessDays" hint={`Default ${d["kajabi.accessDays"]}: a 31 day month plus 7 days for retries.`}>
+              <input id="accessDays" name="accessDays" type="number" inputMode="numeric" className="field" defaultValue={settings["kajabi.accessDays"]} min={1} max={3660} required />
+            </Field>
+            <Field label="Days for a free start" htmlFor="freeAccessDays" hint={`Default ${d["kajabi.freeAccessDays"]}: a 7 day trial plus 3 days. The first real charge extends it.`}>
+              <input id="freeAccessDays" name="freeAccessDays" type="number" inputMode="numeric" className="field" defaultValue={settings["kajabi.freeAccessDays"]} min={1} max={3660} required />
+            </Field>
+          </div>
+          <div className="mt-4">
+            <Field label="Per offer overrides" htmlFor="offerAccessDays" hint="Optional. One per line: the Kajabi offer id, a space, the days. Use it for anything that is not monthly, for example an annual plan at 372.">
+              <textarea
+                id="offerAccessDays"
+                name="offerAccessDays"
+                className="field min-h-24 font-mono text-sm"
+                defaultValue={Object.entries(settings["kajabi.offerAccessDays"]).map(([k, v]) => `${k} ${v}`).join("\n")}
+                placeholder="2151358029 372"
+                spellCheck={false}
+              />
             </Field>
           </div>
         </ActionForm>

@@ -134,6 +134,8 @@ Things to know when reading it:
 - A row with no email or no offer id could not be applied. It usually means the wrong event was sent, or a forwarder was set up without those fields. The raw payload tells you which.
 - "Not mapped" rows have a "Map this offer" link to Admin > Advisors. Map the id there, come back, press Replay.
 - `ignored` is normal for events that are not purchases or cancellations.
+- `renewed Evren until 10 Oct 2026` is a monthly payment pushing the access window out. Kajabi never sends cancellations; access ends when the window is not renewed. The window lengths are in Admin > Settings > Kajabi access windows.
+- `/api/cron/expire` runs nightly and marks closed windows as `EXPIRED`. If Admin > Users shows someone as active past their end date, that job did not run; open the URL by hand (it is idempotent).
 - A person who bought but says they have no access: the log has no search box, so use your browser's find on the page (the last hundred events are all on it) or check their account in Admin > Users. No row means Kajabi never called us (check the webhook URL and the token). A row with an error means we could not apply it, and the error says why.
 
 The log is also the audit trail. Nothing in it is ever deleted.
