@@ -127,7 +127,7 @@ export async function titleConversation(conversationId: string, firstUserMessage
         "You label conversations for a list view. Given the first message a business owner sent to an advisor, return a short label of two to six words describing the topic, in sentence case, with no quotes, no trailing punctuation and no em dashes. Do not answer the message. Do not comment on it. Only label it.",
       prompt: firstUserMessage.slice(0, 600),
     });
-    title = object.title.trim().replace(/[–—]/g, "-").replace(/[.!?]+$/g, "");
+    title = object.title.trim().replace(/[\u2013\u2014]/g, "-").replace(/[.!?]+$/g, "");
   } catch (err) {
     console.error("[memory] title failed:", err instanceof Error ? err.message : err);
   }
