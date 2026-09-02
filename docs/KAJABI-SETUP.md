@@ -21,11 +21,23 @@ You do not need to build this yourself. Sign in to the platform, open Admin > Ka
 
 ## Where in Kajabi
 
-Kajabi moves its menus around, so if a label below is slightly different, look for the nearest match.
+**Done on 2 September 2026.** Settings > Integrations & Webhooks > Webhooks now has two webhooks, both pointing at the address above:
 
-**If your account has Webhooks:** Settings > Integrations (some accounts call it Third-party integrations) > Webhooks > Add webhook. Paste the address from Admin > Kajabi. Tick the events for offer purchased and offer cancelled, or the closest wording your account shows, such as "Purchase created" and "Subscription cancelled". Save. One webhook covers every offer; you do not need one per offer.
+| Kajabi event | What it means | What the platform does |
+| --- | --- | --- |
+| Payment Succeeded (`payment.succeeded`) | Any successful charge: a first purchase, a monthly renewal, a payment plan instalment | Grants the offer's advisor or suite. A renewal for something the person already holds is a no-op. |
+| Cart Purchase (`order.created`) | A Kajabi Cart order, which can hold several offers | Grants every offer in the order. |
 
-**If Webhooks is not there:** Kajabi can send the same message through Zapier or Make. Create a Zap with the Kajabi trigger "New purchase" and the action "Webhooks by Zapier: POST" to the address above, and a second Zap with the trigger for a cancelled offer. In each POST, send these fields, spelled exactly like this:
+One webhook per event covers every offer; there is nothing to do per offer.
+
+**Cancellations are the gap.** Kajabi's own webhooks only report money coming in. There is no Kajabi event for a cancelled subscription, a refund or a failed renewal, so on its own this setup never removes access. Two ways to close that:
+
+1. **Zapier (recommended, ten minutes):** a Zap with the Kajabi trigger "Subscription Cancellation" and the action "Webhooks by Zapier: POST" to the same address, sending the fields in the table below with `event` set to `offer_cancelled`. Make can do the same.
+2. **By hand until then:** Admin > Users > the person > Revoke. The Kajabi purchase list shows who cancelled.
+
+A free trial that converts fires Payment Succeeded on its first real charge. Whether Kajabi also fires it when the $0 trial starts is confirmed by the first trial signup; if it does not, the trial offers need the Zapier route as well, with the "New Purchase" trigger.
+
+**If you ever relay through Zapier or Make**, send these fields, spelled exactly like this:
 
 | Field | Purchase Zap | Cancellation Zap |
 | --- | --- | --- |

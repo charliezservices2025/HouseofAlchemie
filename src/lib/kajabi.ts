@@ -10,7 +10,10 @@ export type NormalisedKajabiEvent = {
   memberEmail: string | null;
   memberName: string | null;
   memberId: string | null;
+  /** The first offer in the event. Kept on the event row for the admin list. */
   offerId: string | null;
+  /** Every offer in the event. A Kajabi Cart order can carry several. */
+  offerIds: string[];
   offerTitle: string | null;
 };
 
@@ -31,10 +34,29 @@ function dig(obj: unknown, paths: string[]): string | null {
   return null;
 }
 
+function digArray(obj: unknown, paths: string[]): Record<string, unknown>[] {
+  for (const path of paths) {
+    let cur: unknown = obj;
+    for (const key of path.split(".")) {
+      if (cur && typeof cur === "object" && key in (cur as Record<string, unknown>)) {
+        cur = (cur as Record<string, unknown>)[key];
+      } else {
+        cur = undefined;
+        break;
+      }
+    }
+    if (Array.isArray(cur)) return cur.filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
+  }
+  return [];
+}
+
 /**
- * Kajabi's webhook payloads vary by event and by how the automation was set
- * up, so the shape is discovered rather than assumed. The raw payload is kept
- * on the KajabiEvent row for anything this misses.
+ * Kajabi's native webhooks (Payment Succeeded, Cart Purchase, Purchase
+ * Created) send the member as `member` and the offer as `offer`, or for
+ * Cart orders as an `order_items` array. Zapier or Make relays flatten
+ * that into `email` and `offer_id`. Every path is tried so a change on
+ * Kajabi's side degrades to an unmapped row, never a lost purchase. The
+ * raw payload is kept on the KajabiEvent row for anything this misses.
  */
 export function normaliseKajabiPayload(payload: unknown, headerEvent?: string | null): NormalisedKajabiEvent {
   const eventType = (
@@ -44,21 +66,54 @@ export function normaliseKajabiPayload(payload: unknown, headerEvent?: string | 
   ).toLowerCase();
 
   const memberEmail = dig(payload, [
-    "data.member.email", "member.email", "data.contact.email", "contact.email", "data.email", "email", "customer.email", "data.customer.email", "payload.member.email",
+    "member.email", "Member.email", "data.member.email", "payload.member.email",
+    "contact.email", "data.contact.email", "customer.email", "data.customer.email",
+    "member_email", "data.member_email", "customer_email", "data.email", "email",
   ])?.toLowerCase() ?? null;
-  const memberName = dig(payload, ["data.member.name", "member.name", "data.contact.name", "contact.name", "name", "data.name", "customer.name"]);
-  const memberId = dig(payload, ["data.member.id", "member.id", "data.contact.id", "contact.id", "member_id", "data.member_id"]);
-  const offerId = dig(payload, ["data.offer.id", "offer.id", "data.offer_id", "offer_id", "data.product.id", "product.id", "purchase.offer.id", "data.purchase.offer.id"]);
-  const offerTitle = dig(payload, ["data.offer.title", "offer.title", "data.offer.name", "offer.name", "data.product.title", "product.title"]);
+  const memberName = dig(payload, [
+    "member.name", "Member.name", "data.member.name", "payload.member.name",
+    "contact.name", "data.contact.name", "customer.name", "member_name", "name", "data.name",
+  ]);
+  const memberId = dig(payload, [
+    "member.id", "Member.id", "data.member.id", "payload.member.id",
+    "contact.id", "data.contact.id", "member_id", "data.member_id",
+  ]);
 
+  const singleOfferId = dig(payload, [
+    "offer.id", "data.offer.id", "payload.offer.id", "offer_id", "data.offer_id", "payload.offer_id",
+    "product.id", "data.product.id", "purchase.offer.id", "data.purchase.offer.id",
+  ]);
+  const singleOfferTitle = dig(payload, [
+    "offer.title", "data.offer.title", "payload.offer.title", "offer.name", "data.offer.name",
+    "offer_title", "product.title", "data.product.title",
+  ]);
+
+  // Cart orders: one event, several offers.
+  const items = digArray(payload, ["order_items", "data.order_items", "payload.order_items", "order.order_items", "line_items", "items"]);
+  const cartOffers = items
+    .filter((it) => {
+      const type = typeof it.type === "string" ? it.type.toLowerCase() : "";
+      return !type || type.includes("offer");
+    })
+    .map((it) => ({ id: dig(it, ["id", "offer_id", "offer.id"]), title: dig(it, ["title", "name", "offer.title"]) }))
+    .filter((it): it is { id: string; title: string | null } => !!it.id);
+
+  const offerIds = Array.from(new Set([singleOfferId, ...cartOffers.map((c) => c.id)].filter((x): x is string => !!x)));
+  const offerId = offerIds[0] ?? null;
+  const offerTitle = singleOfferTitle ?? cartOffers[0]?.title ?? null;
+
+  // Kajabi's own names are "payment.succeeded" and "order.created"; Zapier
+  // relays use words like "purchase" and "cancel". Anything that reads as a
+  // sale grants, anything that reads as an ending revokes, the rest is kept
+  // but ignored.
   let action: NormalisedKajabiEvent["action"] = "ignore";
-  if (/purchase|grant|created|activated|subscri|paid|success/.test(eventType) && !/cancel|revok|refund|fail|expir|remov/.test(eventType)) {
+  if (/purchase|grant|created|activated|subscri|paid|succe|order/.test(eventType) && !/cancel|revok|refund|fail|expir|remov/.test(eventType)) {
     action = "grant";
   } else if (/cancel|revok|refund|expir|remov|deactivat|fail/.test(eventType)) {
     action = "revoke";
   }
 
-  return { eventType, action, memberEmail, memberName, memberId, offerId, offerTitle };
+  return { eventType, action, memberEmail, memberName, memberId, offerId, offerIds, offerTitle };
 }
 
 export function kajabiSecretMatches(provided: string | null): boolean {
@@ -67,33 +122,47 @@ export function kajabiSecretMatches(provided: string | null): boolean {
   return safeEqual(provided, expected);
 }
 
+type Target = { advisorId?: string; suiteId?: string; name: string; offerId: string };
+
 /**
- * Applies a normalised event: grants or revokes the entitlement mapped to
- * the Kajabi offer. New subscribers are created without a password and sent
- * a set password link, so a person can buy on Kajabi and be talking to their
- * advisor within minutes.
+ * Applies a normalised event: grants or revokes the entitlements mapped to
+ * the Kajabi offers in it. New subscribers are created without a password
+ * and sent a set password link, so a person can buy on Kajabi and be talking
+ * to their advisor within minutes. A renewal payment for something they
+ * already hold is a no-op, so Payment Succeeded firing every month is safe.
  */
 export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEvent): Promise<string> {
   if (ev.action === "ignore") return `ignored event type "${ev.eventType}"`;
   if (!ev.memberEmail) return "no member email in payload";
-  if (!ev.offerId) return "no offer id in payload";
+  const offerIds = ev.offerIds.length ? ev.offerIds : ev.offerId ? [ev.offerId] : [];
+  if (!offerIds.length) return "no offer id in payload";
 
   // One Kajabi offer can grant several things. Every specialist plan on the
   // sales page "includes Evren", so Lyra's offer id appears on both Lyra and
   // Evren, and a suite offer id appears on the suite.
   const [advisors, suites] = await Promise.all([
-    db.advisor.findMany({ where: { kajabiOfferIds: { has: ev.offerId } } }),
-    db.suite.findMany({ where: { kajabiOfferIds: { has: ev.offerId } } }),
+    db.advisor.findMany({ where: { kajabiOfferIds: { hasSome: offerIds } } }),
+    db.suite.findMany({ where: { kajabiOfferIds: { hasSome: offerIds } } }),
   ]);
-  if (!advisors.length && !suites.length) {
-    return `offer ${ev.offerId} (${ev.offerTitle ?? "untitled"}) is not mapped to an advisor or suite`;
-  }
 
-  const targets = [
-    ...advisors.map((a) => ({ advisorId: a.id as string | undefined, suiteId: undefined as string | undefined, name: a.name })),
-    ...suites.map((s) => ({ advisorId: undefined as string | undefined, suiteId: s.id as string | undefined, name: s.name })),
-  ];
-  const names = targets.map((t) => t.name).join(", ");
+  const targets: Target[] = [];
+  const unmapped: string[] = [];
+  for (const offerId of offerIds) {
+    const a = advisors.filter((x) => x.kajabiOfferIds.includes(offerId));
+    const s = suites.filter((x) => x.kajabiOfferIds.includes(offerId));
+    if (!a.length && !s.length) {
+      unmapped.push(offerId);
+      continue;
+    }
+    targets.push(...a.map((x) => ({ advisorId: x.id, name: x.name, offerId })));
+    targets.push(...s.map((x) => ({ suiteId: x.id, name: x.name, offerId })));
+  }
+  if (!targets.length) {
+    const first = offerIds[0];
+    return `offer ${first}${ev.offerTitle ? ` (${ev.offerTitle})` : ""} is not mapped to an advisor or suite`;
+  }
+  const names = Array.from(new Set(targets.map((t) => t.name))).join(", ");
+  const unmappedNote = unmapped.length ? `; offer ${unmapped.join(", ")} not mapped` : "";
 
   if (ev.action === "revoke") {
     let count = 0;
@@ -103,14 +172,14 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
           user: { email: ev.memberEmail },
           status: "ACTIVE",
           source: "KAJABI",
-          kajabiOfferId: ev.offerId,
+          kajabiOfferId: t.offerId,
           ...(t.advisorId ? { advisorId: t.advisorId } : { suiteId: t.suiteId }),
         },
         data: { status: "REVOKED", revokedAt: new Date() },
       });
       count += res.count;
     }
-    return `revoked ${count} entitlement(s) for ${names}`;
+    return `revoked ${count} entitlement(s) for ${names}${unmappedNote}`;
   }
 
   // grant
@@ -129,7 +198,7 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
   let granted = 0;
   for (const t of targets) {
     const existing = await db.entitlement.findFirst({
-      where: { userId: user.id, status: "ACTIVE", kajabiOfferId: ev.offerId, ...(t.advisorId ? { advisorId: t.advisorId } : { suiteId: t.suiteId }) },
+      where: { userId: user.id, status: "ACTIVE", kajabiOfferId: t.offerId, ...(t.advisorId ? { advisorId: t.advisorId } : { suiteId: t.suiteId }) },
     });
     if (existing) continue;
     await db.entitlement.create({
@@ -137,7 +206,7 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
         userId: user.id,
         ...(t.advisorId ? { advisorId: t.advisorId } : { suiteId: t.suiteId }),
         source: "KAJABI",
-        kajabiOfferId: ev.offerId,
+        kajabiOfferId: t.offerId,
         kajabiMemberId: ev.memberId,
         note: ev.offerTitle ?? undefined,
       },
@@ -146,12 +215,14 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
   }
 
   // The most specific thing they bought is the one the welcome email names.
-  const headline = suites[0]?.name ?? advisors.find((a) => a.slug !== "evren")?.name ?? advisors[0]?.name ?? "your advisor";
+  const suiteNames = suites.map((s) => s.name);
+  const specialist = advisors.find((a) => a.slug !== "evren")?.name;
+  const headline = suiteNames[0] ?? specialist ?? advisors[0]?.name ?? "your advisor";
 
   if (isNew || !user.passwordHash) {
     const raw = await issueToken(user.id, "SET_PASSWORD");
     await sendEmail(setPasswordMail(user.email, raw, headline));
-    return `granted ${names}; ${isNew ? "created account and " : ""}sent set password email`;
+    return `granted ${names}; ${isNew ? "created account and " : ""}sent set password email${unmappedNote}`;
   }
-  return granted ? `granted ${names}` : `already had ${names}`;
+  return (granted ? `granted ${names}` : `already had ${names}`) + unmappedNote;
 }
