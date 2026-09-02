@@ -3,8 +3,16 @@ import { Resend } from "resend";
 
 type Mail = { to: string; subject: string; html: string; text: string };
 
+/**
+ * Base URL for links in emails. Production sets APP_URL. Preview deployments
+ * fall back to the URL Vercel assigns them, so a branch never emails a link
+ * to the wrong host.
+ */
 function appUrl() {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const explicit = process.env.APP_URL;
+  if (explicit) return explicit.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
 }
 
 /**
