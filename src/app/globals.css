@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+/*
+  House of Alchemie brand system.
+  Same wordmark, same Cormorant display type, same ink and sage palette as the
+  sales pages, so the product looks like it could only have come from here.
+*/
+
+@theme {
+  --color-ink: #1e2222;
+  --color-ink-soft: #3d4444;
+  --color-ink-muted: #6b7372;
+  --color-sage: #2a544b;
+  --color-sage-deep: #1f3f38;
+  --color-sage-light: #8fa69d;
+  --color-sage-mist: #e6ede9;
+  --color-sage-whisper: #f1f5f3;
+  --color-cream: #f7f5f0;
+  --color-paper: #ffffff;
+  --color-line: #e3e0d8;
+  --color-line-soft: #eeebe4;
+  --color-gold: #b8955a;
+  --color-danger: #9b3b3b;
+  --color-danger-soft: #f6e9e9;
+
+  --font-display: var(--hoa-font-display);
+  --font-body: var(--hoa-font-body);
+
+  --radius-card: 0.375rem;
+}
+
+/* Font presets. Registered users choose one in Settings. */
+:root {
+  --hoa-font-display: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --hoa-font-body: var(--font-lato), Lato, "Helvetica Neue", Arial, sans-serif;
+  --hoa-scale: 1;
+}
+html[data-font="editorial"] {
+  --hoa-font-display: var(--font-playfair), "Playfair Display", Georgia, serif;
+  --hoa-font-body: var(--font-source-sans), "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+}
+html[data-font="modern"] {
+  --hoa-font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --hoa-font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html[data-scale="90"] { --hoa-scale: 0.9; }
+html[data-scale="110"] { --hoa-scale: 1.1; }
+html[data-scale="120"] { --hoa-scale: 1.2; }
+
+html {
+  font-size: calc(16px * var(--hoa-scale));
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--hoa-font-body);
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--hoa-font-display);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+::selection {
+  background: var(--color-sage-mist);
+  color: var(--color-ink);
+}
+
+/* Small caps label used throughout the sales pages */
+.eyebrow {
+  font-family: var(--hoa-font-body);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+/* Buttons echo the checkout pages: sharp corners, quiet, confident */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 1px solid var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--hoa-font-body);
+  font-size: 0.8125rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--color-sage-deep); border-color: var(--color-sage-deep); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-secondary {
+  background: transparent;
+  color: var(--color-ink);
+}
+.btn-secondary:hover { background: var(--color-ink); color: var(--color-paper); }
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-ink-soft);
+}
+.btn-ghost:hover { background: var(--color-sage-whisper); border-color: transparent; color: var(--color-ink); }
+.btn-sage { background: var(--color-sage); border-color: var(--color-sage); }
+.btn-sage:hover { background: var(--color-sage-deep); border-color: var(--color-sage-deep); }
+
+.field {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-family: var(--hoa-font-body);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.field:focus { border-color: var(--color-sage); box-shadow: 0 0 0 3px var(--color-sage-mist); }
+.field::placeholder { color: var(--color-ink-muted); }
+textarea.field { min-height: 6rem; resize: vertical; line-height: 1.55; }
+
+.card {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+}
+
+.hairline { border-top: 1px solid var(--color-line); }
+
+/* Chat prose: tables, plans and frameworks must read as documents */
+.prose-hoa { line-height: 1.65; font-size: 1rem; color: var(--color-ink); }
+.prose-hoa > * + * { margin-top: 0.85em; }
+.prose-hoa h1, .prose-hoa h2, .prose-hoa h3 {
+  font-family: var(--hoa-font-display);
+  font-weight: 500;
+  line-height: 1.2;
+  margin-top: 1.4em;
+}
+.prose-hoa h1 { font-size: 1.6rem; }
+.prose-hoa h2 { font-size: 1.35rem; }
+.prose-hoa h3 { font-size: 1.15rem; }
+.prose-hoa p { margin: 0; }
+.prose-hoa strong { font-weight: 700; color: var(--color-ink); }
+.prose-hoa em { font-style: italic; }
+.prose-hoa ul, .prose-hoa ol { padding-left: 1.35rem; }
+.prose-hoa ul { list-style: disc; }
+.prose-hoa ol { list-style: decimal; }
+.prose-hoa li + li { margin-top: 0.3em; }
+.prose-hoa blockquote {
+  border-left: 2px solid var(--color-sage);
+  padding-left: 1rem;
+  color: var(--color-ink-soft);
+  font-style: italic;
+}
+.prose-hoa hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.4em 0; }
+.prose-hoa code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+  background: var(--color-sage-whisper);
+  padding: 0.1em 0.35em;
+}
+.prose-hoa pre { background: var(--color-sage-whisper); padding: 0.9rem 1rem; overflow-x: auto; }
+.prose-hoa pre code { background: transparent; padding: 0; }
+.prose-hoa table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; display: block; overflow-x: auto; }
+.prose-hoa thead th {
+  text-align: left;
+  font-family: var(--hoa-font-body);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  border-bottom: 1px solid var(--color-ink);
+  padding: 0.5rem 0.6rem;
+}
+.prose-hoa tbody td { border-bottom: 1px solid var(--color-line); padding: 0.55rem 0.6rem; vertical-align: top; }
+.prose-hoa a { color: var(--color-sage); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Streaming caret */
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 0.15em;
+  vertical-align: -0.15em;
+  background: var(--color-sage-light);
+  animation: caret 1s steps(2, start) infinite;
+}
+@keyframes caret { to { visibility: hidden; } }
+
+/* Reduce motion for people who ask for it */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Keyboard focus is visible everywhere */
+:focus-visible { outline: 2px solid var(--color-sage); outline-offset: 2px; }
+
+/* iOS safe areas for the chat composer */
+.safe-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }

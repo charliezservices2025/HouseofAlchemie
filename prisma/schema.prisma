@@ -1,0 +1,396 @@
+// House of Alchemie data model.
+//
+// Designed for five advisors and three suites from day one (Schedule A, "The
+// advisor registry"), even though only Evren is switched on in Phase 1.
+// Everything a subscriber tells one advisor lands in the shared Profile and
+// MemoryFact tables so the whole team knows them (How It Will Work, Q1 and Q2).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Accounts, sessions, security
+// ---------------------------------------------------------------------------
+
+enum Role {
+  SUBSCRIBER
+  ADMIN
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  emailVerifiedAt  DateTime?
+  passwordHash     String?
+  name             String?
+  role             Role      @default(SUBSCRIBER)
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  // Interface preferences (registered users can customise their type)
+  fontPreset       String    @default("house")
+  textScale        Int       @default(100)
+  onboardedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sessions      Session[]
+  authTokens    AuthToken[]
+  entitlements  Entitlement[]
+  profile       Profile?
+  memories      MemoryFact[]
+  conversations Conversation[]
+  usage         UsageLedger[]
+  auditActions  AuditLog[]    @relation("AuditActor")
+
+  @@index([lockedUntil])
+}
+
+// Session id is the SHA-256 of the raw cookie token. The raw token never
+// touches the database, so a database leak cannot be replayed as a login.
+model Session {
+  id         String    @id
+  userId     String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+  SET_PASSWORD
+}
+
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+}
+
+// Every sign in attempt, keyed by email and by IP, so lockout and rate limiting
+// are enforced server side rather than in the browser.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  succeeded Boolean
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// The advisor registry and suites
+// ---------------------------------------------------------------------------
+
+model Advisor {
+  id                  String   @id @default(cuid())
+  slug                String   @unique
+  name                String
+  title               String
+  tagline             String
+  description         String   @db.Text
+  systemPrompt        String   @db.Text
+  neverSay            String[]
+  // [{ id, question, placeholder }] asked the first time a subscriber meets this advisor
+  onboardingQuestions Json     @default("[]")
+  model               String   @default("claude-sonnet-5")
+  monthlyTokenCap     Int      @default(600000)
+  accentColor         String?
+  imageUrl            String?
+  sortOrder           Int      @default(0)
+  isActive            Boolean  @default(false)
+  // Kajabi offer ids that grant this advisor on their own
+  kajabiOfferIds      String[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  conversations Conversation[]
+  entitlements  Entitlement[]
+  suites        SuiteAdvisor[]
+  usage         UsageLedger[]
+}
+
+model Suite {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  name            String
+  tagline         String
+  description     String   @db.Text
+  monthlyTokenCap Int      @default(1500000)
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(false)
+  kajabiOfferIds  String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members      SuiteAdvisor[]
+  entitlements Entitlement[]
+}
+
+model SuiteAdvisor {
+  suiteId   String
+  advisorId String
+
+  suite   Suite   @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  advisor Advisor @relation(fields: [advisorId], references: [id], onDelete: Cascade)
+
+  @@id([suiteId, advisorId])
+}
+
+// ---------------------------------------------------------------------------
+// Entitlements: what a subscriber can open, and why
+// ---------------------------------------------------------------------------
+
+enum EntitlementSource {
+  KAJABI
+  ADMIN
+  COMP
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model Entitlement {
+  id            String            @id @default(cuid())
+  userId        String
+  advisorId     String?
+  suiteId       String?
+  source        EntitlementSource
+  status        EntitlementStatus @default(ACTIVE)
+  kajabiOfferId String?
+  kajabiMemberId String?
+  note          String?
+  grantedAt     DateTime          @default(now())
+  revokedAt     DateTime?
+  expiresAt     DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  advisor Advisor? @relation(fields: [advisorId], references: [id], onDelete: Cascade)
+  suite   Suite?   @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([kajabiOfferId])
+}
+
+// ---------------------------------------------------------------------------
+// Memory: the shared profile every advisor reads
+// ---------------------------------------------------------------------------
+
+model Profile {
+  userId         String   @id
+  // { [questionId]: answer } from the shared intake
+  intake         Json     @default("{}")
+  // { [advisorSlug]: { [questionId]: answer } } from each advisor's own questions
+  advisorIntakes Json     @default("{}")
+  // Rolling summary so months of history stay usable inside a prompt
+  summary        String?  @db.Text
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum MemoryCategory {
+  CLIENT
+  OFFER
+  LAUNCH
+  POSITIONING
+  GOAL
+  BLOCKER
+  PREFERENCE
+  OTHER
+}
+
+model MemoryFact {
+  id         String         @id @default(cuid())
+  userId     String
+  category   MemoryCategory
+  content    String         @db.Text
+  // "intake", "user", or a conversation id
+  source     String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  archivedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, archivedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Conversations
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id         String    @id @default(cuid())
+  userId     String
+  advisorId  String
+  title      String    @default("New conversation")
+  summary    String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  advisor  Advisor   @relation(fields: [advisorId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, updatedAt])
+  @@index([advisorId])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String      @db.Text
+  tokensIn       Int?
+  tokensOut      Int?
+  // [{ documentTitle, chunkId }] when the answer drew on Erica's frameworks
+  citations      Json?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Usage caps: a heavy user can never cost more than they pay
+// ---------------------------------------------------------------------------
+
+model UsageLedger {
+  id        String   @id @default(cuid())
+  userId    String
+  advisorId String?
+  // YYYY-MM in UTC
+  period    String
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  // Estimated provider cost in microdollars, so cents are never rounded away
+  costMicros BigInt  @default(0)
+  requests  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  advisor Advisor? @relation(fields: [advisorId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, advisorId, period])
+  @@index([period])
+}
+
+// ---------------------------------------------------------------------------
+// Editable settings (intake questions, copy, thresholds) so Erica changes
+// them without a developer
+// ---------------------------------------------------------------------------
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Kajabi webhook inbox, kept verbatim so any grant or revoke can be audited
+// ---------------------------------------------------------------------------
+
+model KajabiEvent {
+  id          String    @id @default(cuid())
+  eventType   String
+  memberEmail String?
+  offerId     String?
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([memberEmail])
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge base: Erica's frameworks, searched before an advisor answers
+// ---------------------------------------------------------------------------
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model KnowledgeDocument {
+  id           String         @id @default(cuid())
+  title        String
+  sourceName   String
+  // Advisor slugs this material applies to. Empty means every advisor.
+  advisorScope String[]
+  status       DocumentStatus @default(PENDING)
+  chunkCount   Int            @default(0)
+  error        String?
+  rawText      String         @db.Text
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  chunks KnowledgeChunk[]
+}
+
+model KnowledgeChunk {
+  id         String                       @id @default(cuid())
+  documentId String
+  ordinal    Int
+  content    String                       @db.Text
+  tokenCount Int
+  embedding  Unsupported("vector(1024)")?
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, ordinal])
+}
+
+// ---------------------------------------------------------------------------
+// Admin audit trail
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
