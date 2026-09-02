@@ -56,7 +56,7 @@ export async function extractMemories(args: { userId: string; conversationId: st
     data: fresh.map((f) => ({
       userId: args.userId,
       category: f.category as MemoryCategory,
-      content: f.content.replace(/[–—]/g, ",").trim(),
+      content: f.content.replace(/[\u2013\u2014]/g, ",").trim(),
       source: args.conversationId,
     })),
   });

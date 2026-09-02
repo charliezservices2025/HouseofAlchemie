@@ -128,7 +128,7 @@ export async function POST(req: Request) {
     onFinish: async ({ text: answer, usage: u }) => {
       const tokensIn = u.inputTokens ?? 0;
       const tokensOut = u.outputTokens ?? 0;
-      const clean = answer.replace(/[–—]/g, ",");
+      const clean = answer.replace(/[\u2013\u2014]/g, ",");
       await db.message.create({
         data: {
           conversationId: convoId,
