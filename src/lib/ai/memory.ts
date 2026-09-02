@@ -41,11 +41,12 @@ export async function extractMemories(args: { userId: string; conversationId: st
       model: anthropic()(UTILITY_MODEL),
       schema: extractSchema,
       system:
-        "You maintain a structured memory of a business owner's situation for a team of advisors. Extract only durable, specific facts the client stated about their own business: clients, offers, prices, launches, positioning, goals, blockers, preferences. Ignore the advisor's advice, ignore speculation, ignore anything already obvious. Write each fact as one plain sentence in third person, present tense, no em dashes. If there is nothing new, return an empty list.",
-      prompt: `Client said:\n${args.userText}\n\nAdvisor replied:\n${args.assistantText}\n\nAlready remembered (do not repeat):\n${existing.map((e) => `- ${e.content}`).join("\n") || "(nothing)"}`,
+        "You maintain a structured memory of a business owner's situation for a team of advisors. Extract only durable, specific facts the owner stated about their own business: their clients, offers, prices, launches, positioning, goals, blockers, preferences. Ignore the advisor's advice, ignore speculation, ignore anything already obvious. Write each fact as one plain sentence in third person, present tense, referring to the business owner as \"the owner\" (never \"the client\", because their customers are called clients), no em dashes. If there is nothing new, return an empty list.",
+      prompt: `The owner said:\n${args.userText}\n\nAdvisor replied:\n${args.assistantText}\n\nAlready remembered (do not repeat):\n${existing.map((e) => `- ${e.content}`).join("\n") || "(nothing)"}`,
     });
     facts = object.facts;
-  } catch {
+  } catch (err) {
+    console.error("[memory] extraction failed:", err instanceof Error ? err.message : err);
     return;
   }
 
@@ -92,23 +93,44 @@ export async function maybeSummariseConversation(conversationId: string) {
       prompt: `${convo.summary ? `Earlier summary:\n${convo.summary}\n\nNew messages:\n` : ""}${transcript}`,
     });
     await db.conversation.update({ where: { id: conversationId }, data: { summary: text.trim() } });
-  } catch {
+  } catch (err) {
     // A failed summary is harmless. The full history is still in the database.
+    console.error("[memory] summary failed:", err instanceof Error ? err.message : err);
   }
+}
+
+/** A safe title when the model does not behave: the first few words of the question. */
+function fallbackTitle(message: string): string {
+  const words = message.replace(/\s+/g, " ").trim().split(" ").slice(0, 7).join(" ");
+  const clean = words.replace(/[.,;:!?"'()]+$/g, "");
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "New conversation";
+}
+
+function looksLikeTitle(s: string): boolean {
+  if (!s || s.length > 60) return false;
+  if (/[\n"“”]/.test(s)) return false;
+  if (s.split(/\s+/).length > 8) return false;
+  if (/^(i |i'm|i’m|sorry|as an|the client|you )/i.test(s)) return false;
+  if (/[.!?]$/.test(s)) return false;
+  return true;
 }
 
 /** Auto title a new conversation from its first exchange. */
 export async function titleConversation(conversationId: string, firstUserMessage: string) {
   if (!aiConfigured()) return;
+  let title = "";
   try {
-    const { text } = await generateText({
+    const { object } = await generateObject({
       model: anthropic()(UTILITY_MODEL),
-      system: "Write a title of at most six words for this conversation, in sentence case, no quotes, no punctuation at the end, no em dashes.",
+      schema: z.object({ title: z.string().min(2).max(60) }),
+      system:
+        "You label conversations for a list view. Given the first message a business owner sent to an advisor, return a short label of two to six words describing the topic, in sentence case, with no quotes, no trailing punctuation and no em dashes. Do not answer the message. Do not comment on it. Only label it.",
       prompt: firstUserMessage.slice(0, 600),
     });
-    const title = text.trim().replace(/^["']|["']$/g, "").slice(0, 80);
-    if (title) await db.conversation.update({ where: { id: conversationId }, data: { title } });
-  } catch {
-    // keep the default title
+    title = object.title.trim().replace(/[–—]/g, "-").replace(/[.!?]+$/g, "");
+  } catch (err) {
+    console.error("[memory] title failed:", err instanceof Error ? err.message : err);
   }
+  if (!looksLikeTitle(title)) title = fallbackTitle(firstUserMessage);
+  await db.conversation.update({ where: { id: conversationId }, data: { title: title.slice(0, 80) } });
 }

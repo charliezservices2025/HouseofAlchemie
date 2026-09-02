@@ -13,34 +13,39 @@ export function estimateCostMicros(model: string, tokensIn: number, tokensOut: n
 
 /**
  * Records one request against the subscriber, the advisor, and the month.
- * Two rows per request: the advisor specific one and an all advisors total
- * (advisorId null), so both per advisor reporting and per subscriber caps are
- * cheap to read.
+ * One row per user, advisor and month. Subscriber and house totals are sums
+ * over these rows; there is deliberately no null advisor "total" row, because
+ * a null inside the compound unique key cannot be upserted.
  */
 export async function recordUsage(args: { userId: string; advisorId: string; model: string; tokensIn: number; tokensOut: number }) {
   const period = currentPeriod();
   const pricing = await getSetting("usage.pricing");
   const costMicros = estimateCostMicros(args.model, args.tokensIn, args.tokensOut, pricing);
 
-  const bump = {
-    tokensIn: { increment: args.tokensIn },
-    tokensOut: { increment: args.tokensOut },
-    costMicros: { increment: costMicros },
-    requests: { increment: 1 },
-  };
+  await db.usageLedger.upsert({
+    where: { userId_advisorId_period: { userId: args.userId, advisorId: args.advisorId, period } },
+    create: { userId: args.userId, advisorId: args.advisorId, period, tokensIn: args.tokensIn, tokensOut: args.tokensOut, costMicros, requests: 1 },
+    update: {
+      tokensIn: { increment: args.tokensIn },
+      tokensOut: { increment: args.tokensOut },
+      costMicros: { increment: costMicros },
+      requests: { increment: 1 },
+    },
+  });
+}
 
-  await db.$transaction([
-    db.usageLedger.upsert({
-      where: { userId_advisorId_period: { userId: args.userId, advisorId: args.advisorId, period } },
-      create: { userId: args.userId, advisorId: args.advisorId, period, tokensIn: args.tokensIn, tokensOut: args.tokensOut, costMicros, requests: 1 },
-      update: bump,
-    }),
-    db.usageLedger.upsert({
-      where: { userId_advisorId_period: { userId: args.userId, advisorId: null as unknown as string, period } },
-      create: { userId: args.userId, advisorId: null, period, tokensIn: args.tokensIn, tokensOut: args.tokensOut, costMicros, requests: 1 },
-      update: bump,
-    }),
-  ]);
+/** Everything a subscriber used this month across all advisors. */
+export async function getMonthlyTotals(userId: string, period = currentPeriod()) {
+  const agg = await db.usageLedger.aggregate({
+    where: { userId, period },
+    _sum: { tokensIn: true, tokensOut: true, costMicros: true, requests: true },
+  });
+  return {
+    tokensIn: agg._sum.tokensIn ?? 0,
+    tokensOut: agg._sum.tokensOut ?? 0,
+    costMicros: agg._sum.costMicros ?? BigInt(0),
+    requests: agg._sum.requests ?? 0,
+  };
 }
 
 export type UsageSnapshot = {

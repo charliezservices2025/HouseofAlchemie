@@ -11,7 +11,7 @@ export function KnowledgeAddForm({ advisors }: { advisors: Array<{ slug: string;
   const [mode, setMode] = useState<"paste" | "upload">("paste");
 
   return (
-    <form action={formAction} className="flex flex-col gap-5" encType="multipart/form-data">
+    <form action={formAction} className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Title" htmlFor="k-title" hint="How it appears in citations, like The Priceless Positioning Framework.">
           <input id="k-title" name="title" className="field" required maxLength={160} autoComplete="off" />

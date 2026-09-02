@@ -14,12 +14,36 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
   const { period: raw } = await searchParams;
   const period = isPeriod(raw) && periods.includes(raw) ? raw : periods[0];
 
-  const [perAdvisor, advisors, total, topRows] = await Promise.all([
+  // The ledger holds one row per subscriber, advisor and month. Totals and
+  // per subscriber figures are sums over those rows.
+  const [perAdvisor, advisors, total, activeUsers, topGroups] = await Promise.all([
     db.usageLedger.groupBy({ by: ["advisorId"], where: { period, advisorId: { not: null } }, _sum: { requests: true, tokensIn: true, tokensOut: true, costMicros: true } }),
     db.advisor.findMany({ select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: "asc" } }),
-    db.usageLedger.aggregate({ where: { period, advisorId: null }, _sum: { requests: true, tokensIn: true, tokensOut: true, costMicros: true }, _count: { userId: true } }),
-    db.usageLedger.findMany({ where: { period, advisorId: null }, orderBy: { costMicros: "desc" }, take: 20, include: { user: { select: { id: true, email: true, name: true } } } }),
+    db.usageLedger.aggregate({ where: { period }, _sum: { requests: true, tokensIn: true, tokensOut: true, costMicros: true } }),
+    db.usageLedger.groupBy({ by: ["userId"], where: { period } }),
+    db.usageLedger.groupBy({
+      by: ["userId"],
+      where: { period },
+      _sum: { requests: true, tokensIn: true, tokensOut: true, costMicros: true },
+      orderBy: { _sum: { costMicros: "desc" } },
+      take: 20,
+    }),
   ]);
+
+  const topUsersById = new Map(
+    (await db.user.findMany({ where: { id: { in: topGroups.map((g) => g.userId) } }, select: { id: true, email: true, name: true } })).map((u) => [u.id, u]),
+  );
+  const topRows = topGroups
+    .filter((g) => topUsersById.has(g.userId))
+    .map((g) => ({
+      id: g.userId,
+      userId: g.userId,
+      requests: g._sum.requests ?? 0,
+      tokensIn: g._sum.tokensIn ?? 0,
+      tokensOut: g._sum.tokensOut ?? 0,
+      costMicros: g._sum.costMicros ?? BigInt(0),
+      user: topUsersById.get(g.userId)!,
+    }));
 
   const advisorName = new Map(advisors.map((a) => [a.id, a.name]));
   const order = new Map(advisors.map((a) => [a.id, a.sortOrder]));
@@ -67,7 +91,7 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
           <Stat label="Estimated cost" value={formatMoney(total._sum.costMicros)} />
           <Stat label="Requests" value={formatNumber(total._sum.requests)} />
           <Stat label="Tokens" value={formatNumber((total._sum.tokensIn ?? 0) + (total._sum.tokensOut ?? 0))} hint={`${formatNumber(total._sum.tokensIn)} in, ${formatNumber(total._sum.tokensOut)} out`} />
-          <Stat label="Active subscribers" value={formatNumber(total._count.userId)} hint="Sent at least one message" />
+          <Stat label="Active subscribers" value={formatNumber(activeUsers.length)} hint="Sent at least one message" />
         </StatGrid>
       </Section>
 

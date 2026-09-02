@@ -25,7 +25,7 @@ export default async function AdminOverviewPage() {
     db.user.count(),
     db.conversation.count({ where: { createdAt: { gte: since } } }),
     db.message.count({ where: { createdAt: { gte: since } } }),
-    db.usageLedger.aggregate({ where: { period, advisorId: null }, _sum: { costMicros: true, requests: true } }),
+    db.usageLedger.aggregate({ where: { period }, _sum: { costMicros: true, requests: true } }),
     db.usageLedger.groupBy({ by: ["advisorId"], where: { period, advisorId: { not: null } }, _sum: { costMicros: true, requests: true, tokensIn: true, tokensOut: true } }),
     db.advisor.findMany({ select: { id: true, name: true, slug: true }, orderBy: { sortOrder: "asc" } }),
     db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 10, include: { actor: { select: { email: true, name: true } } } }),

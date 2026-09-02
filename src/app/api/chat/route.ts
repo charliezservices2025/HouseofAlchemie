@@ -124,32 +124,46 @@ export async function POST(req: Request) {
     system,
     messages: modelMessages,
     maxOutputTokens: 2000,
-    temperature: 0.6,
+    // Persist inside onFinish so the answer is saved even if the client
+    // disconnects mid stream.
     onFinish: async ({ text: answer, usage: u }) => {
       const tokensIn = u.inputTokens ?? 0;
       const tokensOut = u.outputTokens ?? 0;
       const clean = answer.replace(/[\u2013\u2014]/g, ",");
-      await db.message.create({
-        data: {
-          conversationId: convoId,
-          role: "ASSISTANT",
-          content: clean,
-          tokensIn,
-          tokensOut,
-          citations: passages.length ? passages.map((p) => ({ documentTitle: p.documentTitle, chunkId: p.chunkId })) : undefined,
-        },
-      });
-      await db.conversation.update({ where: { id: convoId }, data: { updatedAt: new Date() } });
-      await recordUsage({ userId: user.id, advisorId: advisor.id, model: advisor.model, tokensIn, tokensOut });
-
-      after(async () => {
-        await Promise.allSettled([
-          extractMemories({ userId: user.id, conversationId: convoId, userText: text, assistantText: clean }),
-          maybeSummariseConversation(convoId),
-          isFirstTurn ? titleConversation(convoId, text) : Promise.resolve(),
-        ]);
-      });
+      try {
+        await db.message.create({
+          data: {
+            conversationId: convoId,
+            role: "ASSISTANT",
+            content: clean,
+            tokensIn,
+            tokensOut,
+            citations: passages.length ? passages.map((p) => ({ documentTitle: p.documentTitle, chunkId: p.chunkId })) : undefined,
+          },
+        });
+        await db.conversation.update({ where: { id: convoId }, data: { updatedAt: new Date() } });
+        await recordUsage({ userId: user.id, advisorId: advisor.id, model: advisor.model, tokensIn, tokensOut });
+      } catch (err) {
+        // The reply has already streamed; a persistence failure must be loud in the logs, never silent.
+        console.error("[chat] failed to persist reply or usage:", err instanceof Error ? err.message : err);
+      }
     },
+  });
+
+  // Background work registered here, inside the request scope, and started
+  // once the stream has fully completed. Memory extraction, the rolling
+  // summary and the auto title never delay the reply.
+  after(async () => {
+    try {
+      const answer = (await result.text).replace(/[\u2013\u2014]/g, ",");
+      await Promise.allSettled([
+        extractMemories({ userId: user.id, conversationId: convoId, userText: text, assistantText: answer }),
+        maybeSummariseConversation(convoId),
+        isFirstTurn ? titleConversation(convoId, text) : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error("[chat] background jobs failed:", err instanceof Error ? err.message : err);
+    }
   });
 
   return result.toUIMessageStreamResponse({
