@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--port", "3420"],
       "port": 3420
+    },
+    {
+      "name": "hoa-start",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "start", "--port", "3421"],
+      "port": 3421
     }
   ]
 }
