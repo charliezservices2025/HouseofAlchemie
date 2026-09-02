@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const { advisor, monthlyTokenCap } = access;
 
   if (!aiConfigured()) {
-    return json(503, { error: "Your advisor is not connected yet. The team has been told.", code: "AI_NOT_CONFIGURED" });
+    return json(503, { error: "Your advisor is not connected yet. Please check back soon.", code: "AI_NOT_CONFIGURED" });
   }
 
   const usage = await getUsageSnapshot(user.id, advisor.id, monthlyTokenCap);

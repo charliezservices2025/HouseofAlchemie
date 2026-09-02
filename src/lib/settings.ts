@@ -37,15 +37,15 @@ export const DEFAULTS = {
     "claude-haiku-4-5-20251001": { inputPerMillion: 1, outputPerMillion: 5 },
   } as Record<string, ModelPricing>,
 
-  "usage.warnAtPercent": 80,
+  "usage.warnAtPercent": 80 as number,
 
-  "chat.maxHistoryMessages": 30,
-  "chat.summarizeAfterMessages": 24,
+  "chat.maxHistoryMessages": 30 as number,
+  "chat.summarizeAfterMessages": 24 as number,
 
-  "brand.appName": "House of Alchemie",
-  "brand.supportEmail": "hello@houseofalchemie.ai",
-  "brand.kajabiLibraryUrl": "https://www.houseofalchemie.ai/library",
-  "brand.salesUrl": "https://www.houseofalchemie.ai/",
+  "brand.appName": "House of Alchemie" as string,
+  "brand.supportEmail": "hello@houseofalchemie.ai" as string,
+  "brand.kajabiLibraryUrl": "https://www.houseofalchemie.ai/library" as string,
+  "brand.salesUrl": "https://www.houseofalchemie.ai/" as string,
 } as const;
 
 export type SettingKey = keyof typeof DEFAULTS;

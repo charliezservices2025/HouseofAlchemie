@@ -125,7 +125,8 @@ h1, h2, h3, .font-display {
   border: 1px solid var(--color-line);
   color: var(--color-ink);
   font-family: var(--hoa-font-body);
-  font-size: 1rem;
+  /* Never below 16px, or iOS zooms the page on focus at the smaller text scale */
+  font-size: max(1rem, 16px);
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }

@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
-export const size = { width: 64, height: 64 };
+// 512px so Chrome on Android offers its install prompt; browsers scale it down for tabs.
+export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
 export default function Icon() {
@@ -16,8 +17,8 @@ export default function Icon() {
           background: "#1e2222",
           color: "#f7f5f0",
           fontFamily: "Georgia, serif",
-          fontSize: 40,
-          letterSpacing: -1,
+          fontSize: 320,
+          letterSpacing: -8,
         }}
       >
         H

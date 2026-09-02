@@ -198,7 +198,7 @@ function ChatScreenBody({ advisor, initialMessages, conversationId, usage, aiCon
               <div className="mx-auto w-full max-w-3xl">
                 {blocker?.kind === "not-configured" && (
                   <p role="status" className="border-l-2 border-gold bg-paper px-4 py-3 text-sm leading-relaxed text-ink-soft">
-                    {advisor.name} is not connected yet. Erica&apos;s team has been told.
+                    {advisor.name} is not connected yet. Please check back soon.
                   </p>
                 )}
                 {blocker?.kind === "over-cap" && (

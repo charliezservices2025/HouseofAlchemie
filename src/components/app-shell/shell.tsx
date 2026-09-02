@@ -35,8 +35,8 @@ export function AppShell({ user, advisors, conversations, children }: AppShellPr
 
   return (
     <div className="min-h-dvh bg-cream lg:grid lg:grid-cols-[17rem_1fr]">
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-cream/95 px-4 py-3 backdrop-blur lg:hidden">
+      {/* Mobile top bar: exactly 3.5rem so the main column's offset below matches it */}
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-cream/95 px-4 backdrop-blur lg:hidden">
         <Wordmark size="sm" />
         <button
           type="button"
@@ -63,7 +63,7 @@ export function AppShell({ user, advisors, conversations, children }: AppShellPr
       {/* Rail */}
       <aside
         id="app-rail"
-        className={`fixed inset-y-0 left-0 z-50 flex w-[18rem] max-w-[86vw] transform flex-col border-r border-line bg-paper transition-transform duration-200 lg:static lg:z-auto lg:w-auto lg:max-w-none lg:translate-x-0 lg:bg-cream ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[18rem] max-w-[86vw] transform flex-col border-r border-line bg-paper transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-auto lg:max-w-none lg:translate-x-0 lg:overflow-y-auto lg:bg-cream ${open ? "translate-x-0" : "-translate-x-full"}`}
         aria-label="Navigation"
       >
         <div className="flex items-center justify-between px-5 pb-2 pt-5">
