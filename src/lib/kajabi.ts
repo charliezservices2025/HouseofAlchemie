@@ -219,7 +219,10 @@ export async function applyKajabiEvent(eventId: string, ev: NormalisedKajabiEven
   const specialist = advisors.find((a) => a.slug !== "evren")?.name;
   const headline = suiteNames[0] ?? specialist ?? advisors[0]?.name ?? "your advisor";
 
-  if (isNew || !user.passwordHash) {
+  // A person who has not set a password yet gets a fresh link when they gain
+  // something new. A renewal for what they already hold sends nothing, so a
+  // monthly charge never turns into a monthly email.
+  if (isNew || (granted > 0 && !user.passwordHash)) {
     const raw = await issueToken(user.id, "SET_PASSWORD");
     await sendEmail(setPasswordMail(user.email, raw, headline));
     return `granted ${names}; ${isNew ? "created account and " : ""}sent set password email${unmappedNote}`;
