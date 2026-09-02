@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/wordmark";
 import { Rail, type RailAdvisor, type RailConversation, type RailUser } from "./rail";
@@ -21,11 +20,7 @@ export type AppShellProps = {
  */
 export function AppShell({ user, advisors, conversations, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     if (!open) return;
@@ -82,7 +77,7 @@ export function AppShell({ user, advisors, conversations, children }: AppShellPr
             <X className="h-5 w-5" strokeWidth={1.5} />
           </button>
         </div>
-        <Rail user={user} advisors={advisors} conversations={conversations} />
+        <Rail user={user} advisors={advisors} conversations={conversations} onNavigate={close} />
       </aside>
 
       {/* Main */}

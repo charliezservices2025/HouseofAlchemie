@@ -145,14 +145,15 @@ export async function resetPassword(_prev: ActionState, form: FormData): Promise
   if (!userId) return { error: "This reset link has expired or was already used. Request a new one." };
 
   const passwordHash = await hashPassword(password.data);
-  await db.user.update({
+  const user = await db.user.update({
     where: { id: userId },
     data: { passwordHash, failedLoginCount: 0, lockedUntil: null, emailVerifiedAt: new Date() },
   });
   // A password change signs out every other device.
   await revokeAllSessions(userId);
   await createSession(userId);
-  redirect("/advisors?reset=1");
+  // A Kajabi buyer whose welcome link expired arrives here; they still need the intake.
+  redirect(user.onboardedAt || user.role === "ADMIN" ? "/advisors?reset=1" : "/onboarding");
 }
 
 export async function setPassword(_prev: ActionState, form: FormData): Promise<ActionState> {
